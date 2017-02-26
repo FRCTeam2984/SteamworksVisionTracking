@@ -3,10 +3,7 @@ package org.usfirst.frc.team2984.robot.util;
 import static org.opencv.core.Core.inRange;
 
 import java.io.File;
-import java.text.NumberFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
 
 import org.opencv.core.Core;
@@ -17,9 +14,10 @@ import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
+import org.opencv.videoio.VideoCapture;
 
 
-public class Main extends Thread {
+public class FromWebcam extends Thread {
 
 	private static final double NORMAL_WIDTH = 1.65;
 	
@@ -37,7 +35,7 @@ public class Main extends Thread {
 	private volatile double robotAngle;
 	private volatile double distance;
 	
-	public Main(){
+	public FromWebcam(){
 		minc = new Scalar(58, 144, 133);
 		maxc = new Scalar(133, 255, 255);
 		this.shouldProcess = true;
@@ -60,47 +58,31 @@ public class Main extends Thread {
 	
 	public static void main(String[] args){
 		System.loadLibrary( Core.NATIVE_LIBRARY_NAME );
-		File folder = new File("/home/max/Desktop/pics/blender");
-		Main main = new Main();
-		File[] files = folder.listFiles();
-		Arrays.sort(files, new Comparator<File>(){
-
-			@Override
-			public int compare(File f0, File f1) {
-				return f0.getName().replace("Left", "").replace("Right", "").compareTo(f1.getName().replace("Left", "").replace("Right", ""));
-			}
-			
-		});
-		NumberFormat format = NumberFormat.getInstance();
-		format.setMinimumFractionDigits(2);
-		format.setMaximumFractionDigits(2);
-		NumberFormat percent = NumberFormat.getPercentInstance();
-		boolean now = false;
-		double prev = 0;
-		for(int i = 0; i<files.length; i++){
-			File f = files[i];
-			if(f.getName().contains("Binary") || f.getName().contains("Blurred")){
-				continue;
-			}
-			Mat m = Imgcodecs.imread(f.getAbsolutePath(), Imgcodecs.CV_LOAD_IMAGE_COLOR);
-			Mat resizeimage = new Mat();
-//			Size sz = new Size(320,240);
-//			Imgproc.resize( m, resizeimage, sz );
-			main.process(m);
-			if(main.hasTrack){
-//				System.out.println("For angle of " + i + " calculated was: " + format.format(main.getAngle()*180/Math.PI) + " " + percent.format((Math.abs(main.getAngle()*180/Math.PI + i))/i) + " error");
-			}
-			if(now){
-				System.out.println("Diff" + (main.offsetAngle + prev)*90D/Math.PI);
-				now = false;
-			} else {
-				now = true;
-				prev = main.offsetAngle;
-			}
-//			System.out.println("Name: " + f.getName() + " Distance: " + (main.hasTrack ? main.distance : -1) +
-//					" Angle: " + (main.hasTrack ? main.offsetAngle*180/Math.PI : -1) + " Robot Angle: " + (main.hasTrack ? main.robotAngle : -1));			
-
+		VideoCapture camera = new VideoCapture(0);
+		FromWebcam main = new FromWebcam();
+		Mat frame = new Mat();
+		camera.read(frame);
+		System.out.println(frame.width() + " " + frame.height());
+		if(!camera.isOpened()){
+			System.out.println("Error");
 		}
+		else {
+			while(true){
+				if(camera.read(frame)){
+					Mat resizeimage = new Mat();
+//					Size sz = new Size(320,240);
+//					Imgproc.resize( m, resizeimage, sz );
+					main.process(frame);
+					if(main.hasTrack){
+						System.out.println("Distance: " + (main.hasTrack ? main.distance : -1) +
+							" Angle: " + (main.hasTrack ? main.offsetAngle*180/Math.PI : -1) +
+							" Robot Angle: " + (main.hasTrack ? main.robotAngle : -1));	
+					}
+				}
+
+			}
+		}
+		
 	}
 	
 	/**
@@ -120,9 +102,9 @@ public class Main extends Thread {
 			double averageHight = this.left.height + this.right.height;
 			averageHight /= 2.0;
 			double distance = distance(averageHight);
-			double angle = angle(Math.abs(this.right.x + this.right.width/2D - this.left.x -this.left.width/2D), averageHight);
+			double angle = angle(Math.abs(this.right.x - this.left.x), averageHight);
 			angle *= (this.left.height > this.right.height) ? -1 : 1;
-			double robotAngle = robotAngle((this.right.x + this.left.x + this.right.width/2D + this.left.width/2D)/2.0);
+			double robotAngle = robotAngle((this.right.x + this.left.x)/2.0);
 			hasTrack = true;
 			this.distance = distance;
 			this.offsetAngle = angle;
@@ -160,7 +142,7 @@ public class Main extends Thread {
 	private double angle(double dist, double hight){
 		double widthNomialNormalized = NORMAL_WIDTH*hight;
 //		System.out.print("Dist: " + dist + "height" + hight);
-//		System.out.print("Ratio" + hight + " " + dist + " " + widthNomialNormalized);
+//		System.out.print("Ratio" + dist/widthNomialNormalized + " " + dist + " " + widthNomialNormalized);
 		double angle = Math.acos(Math.min(dist / widthNomialNormalized, 1));
 		return angle;
 	}
@@ -192,7 +174,7 @@ public class Main extends Thread {
             Rect rectB = Imgproc.boundingRect(contours.get(1));
             return new Rect[]{rectA, rectB};
         }
-    	System.out.print("NOT TWO BUT " + contours.size() + "-");
+//    	System.out.print("NOT TWO BUT " + contours.size() + "-");
         return null;
 	}
 	
